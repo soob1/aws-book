@@ -1,5 +1,7 @@
 package com.soob1.book.web;
 
+import com.soob1.book.config.auth.LoginMember;
+import com.soob1.book.config.auth.dto.SessionMember;
 import com.soob1.book.service.posts.PostsService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Controller;
@@ -14,8 +16,11 @@ public class IndexController {
 	private final PostsService postsService;
 
 	@GetMapping("/")
-	public String index(Model model) {
+	public String index(Model model, @LoginMember SessionMember member) {
 		model.addAttribute("posts", postsService.findAll());
+		if (member != null) {
+			model.addAttribute("memberName", member.getName());
+		}
 		return "index";
 	}
 
