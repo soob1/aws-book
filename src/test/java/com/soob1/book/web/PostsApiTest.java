@@ -1,27 +1,34 @@
 package com.soob1.book.web;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.soob1.book.domain.posts.Posts;
 import com.soob1.book.domain.posts.PostsRepository;
 import com.soob1.book.web.dto.PostsSaveRequest;
 import com.soob1.book.web.dto.PostsUpdateRequest;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.boot.test.web.client.TestRestTemplate;
 import org.springframework.boot.test.web.server.LocalServerPort;
 import org.springframework.http.HttpEntity;
-import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.context.WebApplicationContext;
 
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.springframework.security.test.web.servlet.setup.SecurityMockMvcConfigurers.springSecurity;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+@WithMockUser(roles = "USER")
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT) // 랜덤 포트 실행
 class PostsApiTest {
@@ -30,10 +37,20 @@ class PostsApiTest {
 	private int port;
 
 	@Autowired
-	private TestRestTemplate restTemplate;
+	private WebApplicationContext context;
 
 	@Autowired
 	private PostsRepository postsRepository;
+
+	private MockMvc mvc;
+
+	@BeforeEach
+	void setUp() {
+		mvc = MockMvcBuilders
+				.webAppContextSetup(context)
+				.apply(springSecurity())
+				.build();
+	}
 
 	@AfterEach
 	void tearDown() {
@@ -42,7 +59,7 @@ class PostsApiTest {
 
 	@Test
 	@DisplayName("Posts 등록")
-	void save() {
+	void save() throws Exception {
 		// given
 		String title = "title";
 		String content = "content";
@@ -55,12 +72,12 @@ class PostsApiTest {
 		String url = "http://localhost:" + port + "/api/v1/posts";
 
 		// when
-		ResponseEntity<Long> responseEntity = restTemplate.postForEntity(url, request, Long.class);
+		mvc.perform(post(url)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(new ObjectMapper().writeValueAsString(request)))
+				.andExpect(status().isOk());
 
 		// then
-		assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.OK);
-		assertThat(responseEntity.getBody()).isGreaterThan(0L);
-
 		List<Posts> all = postsRepository.findAll();
 		assertThat(all.get(0).getTitle()).isEqualTo(title);
 		assertThat(all.get(0).getContent()).isEqualTo(content);
@@ -68,7 +85,7 @@ class PostsApiTest {
 
 	@Test
 	@DisplayName("Posts 수정")
-	void update() {
+	void update() throws Exception {
 		// given
 		Posts savedPosts = postsRepository.save(Posts.builder()
 				.title("title")
@@ -89,12 +106,12 @@ class PostsApiTest {
 		HttpEntity<PostsUpdateRequest> requestHttpEntity = new HttpEntity<>(updateRequest);
 
 		// when
-		ResponseEntity<Long> responseEntity = restTemplate.exchange(url, HttpMethod.PUT, requestHttpEntity, Long.class);
+		mvc.perform(put(url)
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(new ObjectMapper().writeValueAsString(updateRequest)))
+				.andExpect(status().isOk());
 
 		// then
-		assertThat(responseEntity.getStatusCode()).isEqualTo(HttpStatus.OK);
-		assertThat(responseEntity.getBody()).isGreaterThan(0L);
-
 		List<Posts> all = postsRepository.findAll();
 		assertThat(all.get(0).getTitle()).isEqualTo(expectedTitle);
 		assertThat(all.get(0).getContent()).isEqualTo(expectedContent);
@@ -102,7 +119,7 @@ class PostsApiTest {
 
 	@Test
 	@DisplayName("Posts 삭제")
-	void delete() {
+	void deletePost() throws Exception {
 		// given
 		Posts savedPosts = postsRepository.save(Posts.builder()
 				.title("title")
@@ -115,7 +132,8 @@ class PostsApiTest {
 		String url = "http://localhost:" + port + "/api/v1/posts/" + id;
 
 		// when
-		restTemplate.delete(url);
+		mvc.perform(delete(url))
+				.andExpect(status().isOk());
 
 		// then
 		List<Posts> all = postsRepository.findAll();
